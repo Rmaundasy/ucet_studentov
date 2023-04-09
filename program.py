@@ -32,12 +32,17 @@ def readData(filename):
     # calculate number of days
     i = 5
     running = True
+    # number_of_weekdays is excluding saturdays and sundays
+    number_of_weekdays = 0
     number_of_days = 0
     while(running):
+        if sheet['B' + str(i)].value and 'Суббота' not in sheet['B' + str(i)].value and 'Воскресенье' not in sheet['B' + str(i)].value:
+            number_of_weekdays += 1
         number_of_days += 1
         i += 1
         if(sheet['B'+str(i)].value == None):
             running = False
+    number_of_weekdays -= 1
     number_of_days -= 1
     i = 5
     running = True
@@ -61,11 +66,13 @@ def readData(filename):
         if(sheet['C'+str(i)].value == None):
             running = False
 
-    return (date, number_of_days, groups)
+    return (date, number_of_weekdays, groups)
 
-def writeData(filename, newfilename, date, number_of_days, groups):
+def writeData(filename, newfilename, date, number_of_weekdays, groups):
     book = Workbook()
+    # First sheet
     sheet = book.active
+    sheet.title = 'Лист 1'
     myFont = Font(name='Calibri', color='FF0000')
     row = 2
     column = 1
@@ -76,7 +83,7 @@ def writeData(filename, newfilename, date, number_of_days, groups):
     cell = sheet.cell(row=row, column=column+1)
     cell.value = "Количество студентов"
     cell = sheet.cell(row=row+1, column=column)
-    cell.value = "Ожид. / Действ. часов"
+    cell.value = "Ожид. / Реал. часов"
     cell = sheet.cell(row=row+1, column=column+1)
     cell.value = "Процент посещаемости"
     cell = sheet.cell(row=row+2, column=column)
@@ -92,13 +99,13 @@ def writeData(filename, newfilename, date, number_of_days, groups):
         cell = sheet.cell(row=row, column=column+1)
         cell.value = groups[group].counter
         cell = sheet.cell(row=row+1, column=column)
-        cell.value = "{expected} / {actual}".format(expected=groups[group].counter * 16, actual=round(groups[group].time_total))
+        cell.value = "{expected} / {actual}".format(expected=round(groups[group].counter * number_of_weekdays * 3.2), actual=round(groups[group].time_total))
         cell = sheet.cell(row=row+1, column=column+1)
-        cell.value = "{value}%".format(value=round(groups[group].time_total * 100.0 / (groups[group].counter * 16)))
+        cell.value = "{value}%".format(value=round(groups[group].time_total * 100.0 / (groups[group].counter * number_of_weekdays * 3.2)))
         row += 2
 
         for student in sorted(groups[group].students, key=lambda s: s.name):
-            if (student.time_total / number_of_days) <= (16.0/5.0/100.0*int(percent_of_attendance)):
+            if (student.time_total / number_of_weekdays) <= (3.2/100.0*int(percent_of_attendance)):
                 cell = sheet.cell(row=row, column=column)
                 cell.value = student.name
 
@@ -111,6 +118,38 @@ def writeData(filename, newfilename, date, number_of_days, groups):
 
         row = 2
         column += 2
+    # Second sheet
+    sheet = book.create_sheet('Лист 2')
+    row = 1
+    column = 1
+    sheet.column_dimensions['A'].width = 20
+    sheet.column_dimensions['B'].width = 12
+    sheet.column_dimensions['C'].width = 12
+    sheet.column_dimensions['D'].width = 12
+    cell = sheet.cell(row=row, column=column)
+    cell.value = "Группа"
+    cell = sheet.cell(row=row, column=column+1)
+    cell.value = "Кол-во студ."
+    cell = sheet.cell(row=row, column=column+2)
+    cell.value = "Ожид. часов"
+    cell = sheet.cell(row=row, column=column+3)
+    cell.value = "Реал. часов"
+    cell = sheet.cell(row=row, column=column+4)
+    cell.value = "%"
+    row += 1
+
+    for group in groups:
+        cell = sheet.cell(row=row, column=column)
+        cell.value = group
+        cell = sheet.cell(row=row, column=column+1)
+        cell.value = groups[group].counter
+        cell = sheet.cell(row=row, column=column+2)
+        cell.value = round(groups[group].counter * number_of_weekdays * 3.2)
+        cell = sheet.cell(row=row, column=column+3)
+        cell.value = round(groups[group].time_total)
+        cell = sheet.cell(row=row, column=column+4)
+        cell.value = round(groups[group].time_total * 100.0 / (groups[group].counter * number_of_weekdays * 3.2))
+        row += 1
     book.save(newfilename)
         
 directory = ""
@@ -118,7 +157,11 @@ directory = ""
 def select_file():
     global filenames
     filename = filedialog.askopenfilename(initialdir = "./",title = "Выбрать файл",filetypes = (("excel files","*.xlsx"),("all files","*.*")))
-    filenames.append(filename)
+    if not filenames:
+        filenames.append(filename)
+    else:
+        filenames[0] = filename
+
 
 def filter_indirs(indir):
     if '.' in indir:
@@ -142,13 +185,13 @@ def select_dir():
 def start_callback():
     for filename in filenames:
         print(filename)
-        date, number_of_days, groups = readData(filename)
+        date, number_of_weekdays, groups = readData(filename)
         newfilename = ""
         if len(filenames) == 1:
             newfilename = filename[:-5]+"_посещение.xlsx"
         else:
             newfilename = filename.replace(directory.split('/')[-1], directory.split('/')[-1]+"_посещение")
-        writeData(filename, newfilename, date, number_of_days, groups)
+        writeData(filename, newfilename, date, number_of_weekdays, groups)
 
 def percent_selection(v):
     global percent_of_attendance
